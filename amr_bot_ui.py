@@ -1,3 +1,5 @@
+# Frontend Without Navigation
+
 import sys
 import math
 import threading
@@ -632,3 +634,4 @@ if __name__ == "__main__":
         sys.exit(app.exec())
     finally:
         rclpy.shutdown()
+
