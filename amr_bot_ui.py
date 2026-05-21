@@ -664,17 +664,20 @@ class RealOdomSubscriber:
         self._last_y      = None
         self._node        = None
         self._thread      = None
+        self.last_command = "Stop"    # updated by AMRMainWindow on every cmd send
         if not HAS_ROS:
             return
         self._log = open("encoder_log.csv", "w", newline="")
         self._csv = csv.writer(self._log)
-        self._csv.writerow(["timestamp","distance","left_enc","right_enc"])
+        self._csv.writerow(["timestamp", "command", "cdistance", "left_enc", "right_enc"])
         rclpy.init(args=sys.argv)
         self._node = _OdomNode(self)
         self._thread = threading.Thread(target=lambda: rclpy.spin(self._node), daemon=True)
         self._thread.start()
 
-    def send_cmd(self, linear_x: float, angular_z: float):
+    def send_cmd(self, linear_x: float, angular_z: float, command: str = ""):
+        if command:
+            self.last_command = command
         if self._node:
             self._node.send_cmd(linear_x, angular_z)
 
@@ -692,6 +695,29 @@ class _OdomNode(Node):
         self.sub_ref = subscriber
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel", 10)
         self.create_subscription(Odometry, "/odom", self._cb, 10)
+        # Monitor /cmd_vel to label CSV rows with correct command
+        self.create_subscription(Twist, "/cmd_vel", self._joy_cmd_cb, 10)
+
+    def _joy_cmd_cb(self, msg):
+        """Sniff /cmd_vel to keep last_command in sync with PS5 commands."""
+        lx = msg.linear.x
+        az = msg.angular.z
+        if lx == 0.0 and az == 0.0:
+            cmd = "Stop"
+        elif lx == 0.0 and az != 0.0:
+            # Hardware: UI sends final_w = -w, so:
+            #   pressing Left  → internal w=+ang → final_w=-ang → az < 0 on wire
+            #   pressing Right → internal w=-ang → final_w=+ang → az > 0 on wire
+            cmd = "Right" if az > 0 else "Left"
+        elif lx < 0.0:
+            # Hardware: negative lx = FORWARD
+            cmd = "5s-Forward" if abs(lx) <= 0.25 else "Forward"
+        elif lx > 0.0:
+            # Hardware: positive lx = REVERSE
+            cmd = "5s-Reverse" if abs(lx) <= 0.25 else "Reverse"
+        else:
+            cmd = "Stop"
+        self.sub_ref.last_command = cmd
 
     def _cb(self, msg):
         mw = self.sub_ref.mw
@@ -715,8 +741,13 @@ class _OdomNode(Node):
         if mw._enc_dlg.isVisible():
             mw._enc_dlg.push(self.sub_ref.left_enc, self.sub_ref.right_enc, self.sub_ref.total_dist)
         ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        self.sub_ref._csv.writerow([ts, round(self.sub_ref.total_dist,4),
-            round(self.sub_ref.left_enc,4), round(self.sub_ref.right_enc,4)])
+        self.sub_ref._csv.writerow([
+            ts,
+            self.sub_ref.last_command,
+            round(self.sub_ref.total_dist, 4),
+            round(self.sub_ref.left_enc,   4),
+            round(self.sub_ref.right_enc,  4),
+        ])
         self.sub_ref._log.flush()
 
     def send_cmd(self, lx, az):
@@ -1007,6 +1038,7 @@ class AMRMainWindow(QMainWindow):
         v = w = 0.0
         waypoint_info = "—"
         is_waypoint_nav = False   # track whether we're in autonomous mode
+        _manual_cmd = "Stop"
 
         if not self._hard_stop and self._home_set:
             mc = self.map_canvas
@@ -1069,6 +1101,14 @@ class AMRMainWindow(QMainWindow):
                 if self._moving.get("left"):  w += ang
                 if self._moving.get("right"): w -= ang
 
+                # Build command label for CSV
+                parts = []
+                if self._moving.get("fwd"):   parts.append("Forward")
+                if self._moving.get("bwd"):   parts.append("Reverse")
+                if self._moving.get("left"):  parts.append("Left")
+                if self._moving.get("right"): parts.append("Right")
+                _manual_cmd = "+".join(parts) if parts else "Stop"
+
         # ── Hardware polarity ────────────────────────────────────────────────
         # Manual drive: your hardware wiring needs -v to go forward → flip both axes.
         # Waypoint nav: _navigate_to() already outputs correct ROS-standard polarity
@@ -1076,19 +1116,21 @@ class AMRMainWindow(QMainWindow):
         if is_waypoint_nav:
             final_v = v    # navigator output: positive = forward on real bot
             final_w = w    # navigator output: positive w = left turn
+            _cmd_label = waypoint_info   # e.g. "1/3", "RTH", "DONE"
         else:
             final_v = -v   # manual: original hardware polarity flip
             final_w = -w
+            _cmd_label = _manual_cmd if (v != 0.0 or w != 0.0) else "Stop"
 
         # Continuous publishing at 20 Hz — prevents packet-loss stall cycles
         if (v != 0.0 or w != 0.0) and not self._hard_stop:
-            self._ros.send_cmd(final_v, final_w)
+            self._ros.send_cmd(final_v, final_w, _cmd_label)
             self._last_sent_v = final_v
             self._last_sent_w = final_w
         else:
             if not self._hard_stop:
                 if self._last_sent_v != 0.0 or self._last_sent_w != 0.0:
-                    self._ros.send_cmd(0.0, 0.0)
+                    self._ros.send_cmd(0.0, 0.0, "Stop")
                     self._last_sent_v = 0.0
                     self._last_sent_w = 0.0
 
