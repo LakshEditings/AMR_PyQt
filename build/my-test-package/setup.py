@@ -1,0 +1,1 @@
+/home/user/AMR_PyQt/amr_env/lib/python3.10/site-packages/pkg_resources/tests/data/my-test-package-source/setup.py

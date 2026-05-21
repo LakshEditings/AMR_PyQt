@@ -1,4 +1,4 @@
-#UI With WayPoint
+#UI With WayPoint - Smooth Fixed Version
 
 import sys
 import math
@@ -52,7 +52,6 @@ WAYPOINT_REACH_DIST = 0.15
 #  Map Canvas
 # ─────────────────────────────────────────────────────────────────────────────
 class MapCanvas(QWidget):
-    # Emitted when user clicks on map in waypoint mode (world coords)
     waypoint_clicked = Signal(float, float)
 
     MODE_FOLLOW   = "follow"
@@ -83,15 +82,12 @@ class MapCanvas(QWidget):
         # Waypoints
         self.waypoints: list[tuple[float, float]] = []
         self.current_waypoint_idx = 0
-        self.waypoint_mode = False   # True = clicks add waypoints
+        self.waypoint_mode = False   
 
-        # Manual pan/zoom override (active when user zooms or pans)
-        self._manual_view   = False   # True = user has taken control
+        self._manual_view   = False   
         self._pan_active    = False
         self._pan_last      = QPointF(0, 0)
         self.setMouseTracking(False)
-
-    # ── coordinate transforms ────────────────────────────────────────────────
 
     def _w2c(self, wx: float, wy: float) -> QPointF:
         cx = self.width()  / 2 + (wx - self._view_ox) * self.scale
@@ -102,8 +98,6 @@ class MapCanvas(QWidget):
         wx = (cx - self.width()  / 2) / self.scale + self._view_ox
         wy = (self.height() / 2 - cy) / self.scale + self._view_oy
         return wx, wy
-
-    # ── public API ───────────────────────────────────────────────────────────
 
     def set_home(self, x: float, y: float):
         self.home_x = x
@@ -137,8 +131,6 @@ class MapCanvas(QWidget):
         self.current_waypoint_idx = 0
         self.update()
 
-    # ── zoom / pan public API ────────────────────────────────────────────────
-
     ZOOM_FACTOR = 1.25
 
     def zoom_in(self):
@@ -152,12 +144,9 @@ class MapCanvas(QWidget):
         self.update()
 
     def reset_view(self):
-        """Snap back to auto-managed view (follow or overview)."""
         self._manual_view = False
         self.scale = PIXELS_PER_METRE
         self.update()
-
-    # ── mouse ────────────────────────────────────────────────────────────────
 
     def mousePressEvent(self, event):
         if self.waypoint_mode and event.button() == Qt.LeftButton:
@@ -167,7 +156,6 @@ class MapCanvas(QWidget):
             self.update()
             return
 
-        # Middle-button OR right-button drag = pan
         if event.button() in (Qt.MiddleButton, Qt.RightButton):
             self._pan_active = True
             self._pan_last   = event.position()
@@ -178,7 +166,6 @@ class MapCanvas(QWidget):
         if self._pan_active:
             delta = event.position() - self._pan_last
             self._pan_last = event.position()
-            # canvas delta → world delta (y is flipped)
             self._view_ox -= delta.x() / self.scale
             self._view_oy += delta.y() / self.scale
             self.update()
@@ -189,9 +176,7 @@ class MapCanvas(QWidget):
             self.setCursor(Qt.CrossCursor if self.waypoint_mode else Qt.ArrowCursor)
 
     def wheelEvent(self, event):
-        """Scroll wheel zoom, centred on cursor position."""
         self._manual_view = True
-        # World coords under cursor before zoom
         cx, cy = event.position().x(), event.position().y()
         wx_before, wy_before = self._c2w(cx, cy)
 
@@ -199,13 +184,10 @@ class MapCanvas(QWidget):
         factor = self.ZOOM_FACTOR if delta > 0 else 1.0 / self.ZOOM_FACTOR
         self.scale = max(1.5, min(400.0, self.scale * factor))
 
-        # Adjust view origin so the point under cursor stays fixed
         wx_after, wy_after = self._c2w(cx, cy)
         self._view_ox -= (wx_after - wx_before)
         self._view_oy -= (wy_after - wy_before)
         self.update()
-
-    # ── painting ─────────────────────────────────────────────────────────────
 
     def paintEvent(self, _):
         p = QPainter(self)
@@ -222,10 +204,8 @@ class MapCanvas(QWidget):
         p.end()
 
     def _compute_view(self):
-        # When user has manually panned/zoomed, don't override their view
         if self._manual_view:
             return
-
         W, H = self.width(), self.height()
 
         if self.mode == self.MODE_FOLLOW:
@@ -292,9 +272,9 @@ class MapCanvas(QWidget):
             p.drawLine(0, int(cp.y()), W, int(cp.y()))
             wy += GRID_SIZE / PIXELS_PER_METRE
         origin = self._w2c(0.0, 0.0)
-        p.setPen(QPen(QColor(220, 50, 50, 210), 1))          # Red  — X axis
+        p.setPen(QPen(QColor(220, 50, 50, 210), 1))          
         p.drawLine(0, int(origin.y()), W, int(origin.y()))
-        p.setPen(QPen(QColor(50, 220, 80, 210), 1))          # Green — Y axis
+        p.setPen(QPen(QColor(50, 220, 80, 210), 1))          
         p.drawLine(int(origin.x()), 0, int(origin.x()), H)
 
     def _draw_lidar(self, p):
@@ -333,17 +313,14 @@ class MapCanvas(QWidget):
             return
         pts = [self._w2c(x, y) for x, y in self.waypoints]
 
-        # Draw connecting path lines
         if len(pts) > 1:
             pen = QPen(QColor(255, 165, 0, 160), 2, Qt.DashLine)
             p.setPen(pen)
-            # From bot to first waypoint
             bp = self._w2c(self.bot_x, self.bot_y)
             p.drawLine(bp, pts[0])
             for i in range(1, len(pts)):
                 p.drawLine(pts[i-1], pts[i])
 
-        # Draw each waypoint circle
         for i, pt in enumerate(pts):
             is_current = (i == self.current_waypoint_idx)
             is_done    = (i < self.current_waypoint_idx)
@@ -361,12 +338,10 @@ class MapCanvas(QWidget):
             r = 10 if is_current else 8
             p.drawEllipse(pt, r, r)
 
-            # Label
             p.setPen(QPen(QColor("#000") if not is_done else QColor("#aaa")))
             p.setFont(QFont("Courier New", 7, QFont.Bold))
             p.drawText(int(pt.x()) - 4, int(pt.y()) + 4, str(i + 1))
 
-        # Waypoint mode cursor hint
         if self.waypoint_mode:
             p.setPen(QPen(QColor("#ff9800")))
             p.setFont(QFont("Courier New", 9, QFont.Bold))
@@ -478,7 +453,7 @@ class TelemetryPanel(QFrame):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Control Button helper  – square / fixed size
+#  Control Buttons
 # ─────────────────────────────────────────────────────────────────────────────
 class ControlButton(QPushButton):
     _C = {
@@ -495,30 +470,15 @@ class ControlButton(QPushButton):
         super().__init__(label, parent)
         base, hover = self._C.get(color, self._C["red"])
         fs = font_size or max(11, size // 3)
-        # Square, not circular
         self.setFixedSize(size, size)
         self.setStyleSheet(f"""
             QPushButton {{
-                background:{base};
-                border-radius:8px;
-                color:white;
-                font-size:{fs}px;
-                font-weight:bold;
-                border:2px solid {hover};
+                background:{base}; border-radius:8px; color:white; font-size:{fs}px; font-weight:bold; border:2px solid {hover};
             }}
             QPushButton:hover   {{ background:{hover}; }}
             QPushButton:pressed {{ background:white; color:{base}; }}
         """)
         self.setFocusPolicy(Qt.NoFocus)
-
-    def set_dead(self):
-        self.setEnabled(False)
-        self.setStyleSheet("""
-            QPushButton {
-                background:#2a2a2a; border-radius:8px; color:#555;
-                font-size:18px; font-weight:bold; border:2px solid #444;
-            }
-        """)
 
 
 def wide_btn(text, bg, hover, text_color="white", height=36) -> QPushButton:
@@ -527,10 +487,8 @@ def wide_btn(text, bg, hover, text_color="white", height=36) -> QPushButton:
     b.setFocusPolicy(Qt.NoFocus)
     b.setStyleSheet(f"""
         QPushButton {{
-            background:{bg}; color:{text_color};
-            border:1px solid {hover}; border-radius:8px;
-            font-family:'Courier New'; font-size:10px; font-weight:bold;
-            letter-spacing:1px;
+            background:{bg}; color:{text_color}; border:1px solid {hover}; border-radius:8px;
+            font-family:'Courier New'; font-size:10px; font-weight:bold; letter-spacing:1px;
         }}
         QPushButton:hover  {{ background:{hover}; }}
         QPushButton:pressed {{ background:#000; }}
@@ -538,54 +496,26 @@ def wide_btn(text, bg, hover, text_color="white", height=36) -> QPushButton:
     return b
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Control Pad  – compact square grid
-# ─────────────────────────────────────────────────────────────────────────────
 class ControlPad(QFrame):
-    """
-    Layout:
-
-      [ STOP & SHOW FULL ROUTE ]   ← orange wide button
-
-      [ spd+ ] [ FWD  ] [ spd- ]
-      [ LEFT ] [ HOME ] [ RIGHT ]   ← gap is configurable via GAP_PX
-      [ trn+ ] [ BWD  ] [ trn- ]
-
-      [ WAYPOINT ]
-      [ ENCODER GRAPH ]
-    """
-
-    GAP_PX = 6   # space between buttons – tune freely
+    GAP_PX = 6   
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setStyleSheet("""
-            QFrame { background:#0d1117; border:1px solid #30363d;
-                     border-radius:10px; }
+            QFrame { background:#0d1117; border:1px solid #30363d; border-radius:10px; }
         """)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(14, 14, 14, 14)
         outer.setSpacing(8)
 
-        # Title
         ttl = QLabel("◈  DRIVE CONTROLS")
-        ttl.setStyleSheet("color:#58a6ff; font-family:'Courier New';"
-                          "font-size:11px; font-weight:bold; letter-spacing:2px;")
+        ttl.setStyleSheet("color:#58a6ff; font-family:'Courier New'; font-size:11px; font-weight:bold; letter-spacing:2px;")
         outer.addWidget(ttl, alignment=Qt.AlignCenter)
 
-        # ── STOP button ───────────────────────────────────────────────────────
-        self.btn_stop_route = wide_btn(
-            "⏹   STOP  &  SHOW FULL ROUTE",
-            "#6d2900", "#ff9800", "#ffd740", height=40
-        )
-        self.btn_stop_route.setToolTip(
-            "Stop the bot and zoom map out to show complete route  [Space]"
-        )
+        self.btn_stop_route = wide_btn("⏹   STOP  &  SHOW FULL ROUTE", "#6d2900", "#ff9800", "#ffd740", height=40)
         outer.addWidget(self.btn_stop_route)
 
-        # ── 3×3 square grid ───────────────────────────────────────────────────
-        SZ = 52  # button size in px
-
+        SZ = 52  
         self.btn_fwd      = ControlButton("▲", "red",    size=SZ)
         self.btn_bwd      = ControlButton("▼", "red",    size=SZ)
         self.btn_left     = ControlButton("◄", "red",    size=SZ)
@@ -596,23 +526,9 @@ class ControlPad(QFrame):
         self.btn_turn_up  = ControlButton("+",  "pink",   size=SZ)
         self.btn_turn_dn  = ControlButton("−",  "pink",   size=SZ)
 
-        self.btn_fwd.setToolTip("Forward  [W / ↑]")
-        self.btn_bwd.setToolTip("Reverse  [S / ↓]")
-        self.btn_left.setToolTip("Turn Left  [A / ←]")
-        self.btn_right.setToolTip("Turn Right  [D / →]")
-        self.btn_set_home.setToolTip("Set current position as HOME  [H]  ← SET FIRST before driving!")
-        self.btn_spd_up.setToolTip("Fwd/Rev Speed +5%  [E]")
-        self.btn_spd_dn.setToolTip("Fwd/Rev Speed −5%  [Q]")
-        self.btn_turn_up.setToolTip("Turn Speed +5%  [X]")
-        self.btn_turn_dn.setToolTip("Turn Speed −5%  [Z]")
-
         grid = QGridLayout()
         grid.setSpacing(self.GAP_PX)
         grid.setContentsMargins(0, 0, 0, 0)
-        #       col0              col1          col2
-        # r0   spd+              fwd           spd-
-        # r1   left              HOME          right
-        # r2   turn+             bwd           turn-
         grid.addWidget(self.btn_spd_up,   0, 0, alignment=Qt.AlignCenter)
         grid.addWidget(self.btn_fwd,      0, 1, alignment=Qt.AlignCenter)
         grid.addWidget(self.btn_spd_dn,   0, 2, alignment=Qt.AlignCenter)
@@ -624,7 +540,6 @@ class ControlPad(QFrame):
         grid.addWidget(self.btn_turn_dn,  2, 2, alignment=Qt.AlignCenter)
         outer.addLayout(grid)
 
-        # Legend
         def leg_lbl(txt, clr):
             l = QLabel(txt)
             l.setStyleSheet(f"color:{clr}; font-family:'Courier New'; font-size:9px;")
@@ -635,34 +550,18 @@ class ControlPad(QFrame):
         lg.addWidget(leg_lbl("🩷 TURN SPEED ±5%",    "#f06292"), 2, 0)
         outer.addLayout(lg)
 
-        # ── Waypoint button ───────────────────────────────────────────────────
-        self.btn_waypoint = wide_btn(
-            "✦   WAYPOINT  —  ADD POINTS ON MAP",
-            "#1a0033", "#7b1fa2", "#ce93d8", height=36
-        )
-        self.btn_waypoint.setToolTip(
-            "Toggle waypoint mode: click map to add points; bot follows them in order  [P]"
-        )
+        self.btn_waypoint = wide_btn("✦   WAYPOINT  —  ADD POINTS ON MAP", "#1a0033", "#7b1fa2", "#ce93d8", height=36)
         outer.addWidget(self.btn_waypoint)
 
-        self.btn_clear_wp = wide_btn(
-            "✕   CLEAR WAYPOINTS",
-            "#1a1a00", "#827717", "#fff176", height=30
-        )
-        self.btn_clear_wp.setToolTip("Remove all waypoints  [C]")
+        self.btn_clear_wp = wide_btn("✕   CLEAR WAYPOINTS", "#1a1a00", "#827717", "#fff176", height=30)
         outer.addWidget(self.btn_clear_wp)
 
-        # ── Encoder graph ─────────────────────────────────────────────────────
-        self.btn_encoder_graph = wide_btn(
-            "📊   ENCODER GRAPH  —  /odom",
-            "#003d1a", "#00c853", "#39d353", height=36
-        )
-        self.btn_encoder_graph.setToolTip("Live encoder graph  [G]")
+        self.btn_encoder_graph = wide_btn("📊   ENCODER GRAPH  —  /odom", "#003d1a", "#00c853", "#39d353", height=36)
         outer.addWidget(self.btn_encoder_graph)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Encoder Graph Popup (unchanged)
+#  Encoder Graph Popup
 # ─────────────────────────────────────────────────────────────────────────────
 class EncoderGraphDialog(QDialog):
     def __init__(self, parent=None):
@@ -674,21 +573,18 @@ class EncoderGraphDialog(QDialog):
         layout.setContentsMargins(12,12,12,12)
         hdr = QHBoxLayout()
         ttl = QLabel("◈  WHEEL ENCODER  vs  DISTANCE")
-        ttl.setStyleSheet("color:#58a6ff; font-family:'Courier New';"
-                          "font-size:12px; font-weight:bold; letter-spacing:2px;")
+        ttl.setStyleSheet("color:#58a6ff; font-family:'Courier New'; font-size:12px; font-weight:bold; letter-spacing:2px;")
         hdr.addWidget(ttl); hdr.addStretch()
         src_color = "#39d353" if HAS_ROS else "#f0a500"
         src_text  = "● ROS2 /odom LIVE" if HAS_ROS else "● SIMULATION MODE"
         src_lbl = QLabel(src_text)
-        src_lbl.setStyleSheet(f"color:{src_color}; font-family:'Courier New';"
-                              "font-size:10px; font-weight:bold;")
+        src_lbl.setStyleSheet(f"color:{src_color}; font-family:'Courier New'; font-size:10px; font-weight:bold;")
         hdr.addWidget(src_lbl)
         layout.addLayout(hdr)
         leg = QHBoxLayout()
         for clr, txt in [("#00c853","━━  LEFT MOTOR"), ("#2979ff","━━  RIGHT MOTOR")]:
             l = QLabel(txt)
-            l.setStyleSheet(f"color:{clr}; font-family:'Courier New';"
-                            "font-size:10px; font-weight:bold; padding-right:20px;")
+            l.setStyleSheet(f"color:{clr}; font-family:'Courier New'; font-size:10px; font-weight:bold; padding-right:20px;")
             leg.addWidget(l)
         leg.addStretch()
         layout.addLayout(leg)
@@ -726,8 +622,7 @@ class EncoderGraphDialog(QDialog):
         w.setAlignment(Qt.AlignCenter)
         w.setStyleSheet(f"""
             color:{color}; font-family:'Courier New'; font-size:10px; font-weight:bold;
-            background:#161b22; border:1px solid #30363d; border-radius:6px;
-            padding:5px 14px;
+            background:#161b22; border:1px solid #30363d; border-radius:6px; padding:5px 14px;
         """)
         return w
 
@@ -757,7 +652,7 @@ class EncoderGraphDialog(QDialog):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  ROS2 Node (optional, unchanged)
+#  ROS2 Node Connection
 # ─────────────────────────────────────────────────────────────────────────────
 class RealOdomSubscriber:
     def __init__(self, main_window):
@@ -776,9 +671,7 @@ class RealOdomSubscriber:
         self._csv.writerow(["timestamp","distance","left_enc","right_enc"])
         rclpy.init(args=sys.argv)
         self._node = _OdomNode(self)
-        self._thread = threading.Thread(
-            target=lambda: rclpy.spin(self._node), daemon=True
-        )
+        self._thread = threading.Thread(target=lambda: rclpy.spin(self._node), daemon=True)
         self._thread.start()
 
     def send_cmd(self, linear_x: float, angular_z: float):
@@ -851,25 +744,27 @@ class AMRMainWindow(QMainWindow):
         self.trn_speed_mod   = 100.0
         self._moving         = {"fwd":False,"bwd":False,"left":False,"right":False}
         self._hard_stop      = False
-
-        # Home-set guard – must set home before sim starts properly
         self._home_set = False
 
         # Waypoint navigation state
         self._wp_mode_active = False
         self._following_waypoints = False
         self._returning_home = False
+        self._last_sent_v = 0.0
+        self._last_sent_w = 0.0
 
-        # Sim encoder accumulators
+        # ── Waypoint velocity smoother ──────────────────────────────────────
+        # Smoothly ramps linear & angular towards the navigator's target
+        # to eliminate the jerk/stutter during waypoint following.
+        self._wp_smooth_v = 0.0   # current smoothed linear  (m/s)
+        self._wp_smooth_w = 0.0   # current smoothed angular (rad/s)
+        self._WP_LIN_RAMP = 0.015  # m/s  per tick  (20 Hz → ~0.3 m/s per second)
+        self._WP_ANG_RAMP = 0.04   # rad/s per tick
+
         self._sim_l = self._sim_r = self._sim_d = 0.0
-
-        # ── ROS2 ─────────────────────────────────────────────────────────────
         self._ros = RealOdomSubscriber(self)
-
-        # ── Encoder graph ─────────────────────────────────────────────────────
         self._enc_dlg = EncoderGraphDialog(self)
 
-        # ── Build UI ──────────────────────────────────────────────────────────
         central = QWidget(); self.setCentralWidget(central)
         root = QHBoxLayout(central)
         root.setContentsMargins(10,10,10,10); root.setSpacing(10)
@@ -878,13 +773,11 @@ class AMRMainWindow(QMainWindow):
         lf.setStyleSheet("QFrame{background:#0d1117;border:1px solid #30363d;border-radius:10px;}")
         lv = QVBoxLayout(lf); lv.setContentsMargins(8,8,8,8); lv.setSpacing(4)
         mt = QLabel("◉  LIVE 2D MAP   —   AMR POSITION TRACKING")
-        mt.setStyleSheet("color:#58a6ff;font-family:'Courier New';"
-                         "font-size:11px;font-weight:bold;letter-spacing:2px;padding:4px;")
+        mt.setStyleSheet("color:#58a6ff;font-family:'Courier New';font-size:11px;font-weight:bold;letter-spacing:2px;padding:4px;")
         lv.addWidget(mt)
         self.map_canvas = MapCanvas()
         lv.addWidget(self.map_canvas)
 
-        # ── Zoom / pan toolbar ────────────────────────────────────────────────
         ztb = QHBoxLayout(); ztb.setSpacing(6); ztb.setContentsMargins(0,2,0,2)
 
         def _zb(label, tip, color_pair, slot, w=36, h=28):
@@ -896,8 +789,7 @@ class AMRMainWindow(QMainWindow):
             b.setStyleSheet(f"""
                 QPushButton {{
                     background:{bg}; color:white; border:1px solid {hv};
-                    border-radius:6px; font-family:'Courier New';
-                    font-size:11px; font-weight:bold;
+                    border-radius:6px; font-family:'Courier New'; font-size:11px; font-weight:bold;
                 }}
                 QPushButton:hover   {{ background:{hv}; }}
                 QPushButton:pressed {{ background:white; color:{bg}; }}
@@ -908,19 +800,13 @@ class AMRMainWindow(QMainWindow):
         lbl_map = QLabel("🔍  MAP VIEW")
         lbl_map.setStyleSheet("color:#58a6ff; font-family:'Courier New'; font-size:10px; font-weight:bold;")
         ztb.addWidget(lbl_map)
-
         ztb.addStretch()
 
-        self._btn_zoom_in  = _zb("＋ ZOOM IN",  "Zoom in  [+]",
-                                  ("#0d4f1c","#43a047"), self.map_canvas.zoom_in, w=84)
-        self._btn_zoom_out = _zb("－ ZOOM OUT", "Zoom out  [−]",
-                                  ("#1a1a4f","#42a5f5"), self.map_canvas.zoom_out, w=84)
-        self._btn_zoom_rst = _zb("⊙ RESET",    "Reset to auto-view  [R]",
-                                  ("#3d0000","#e53935"), self.map_canvas.reset_view, w=72)
+        self._btn_zoom_in  = _zb("＋ ZOOM IN",  "Zoom in  [+]", ("#0d4f1c","#43a047"), self.map_canvas.zoom_in, w=84)
+        self._btn_zoom_out = _zb("－ ZOOM OUT", "Zoom out  [−]", ("#1a1a4f","#42a5f5"), self.map_canvas.zoom_out, w=84)
+        self._btn_zoom_rst = _zb("⊙ RESET",    "Reset to auto-view  [R]", ("#3d0000","#e53935"), self.map_canvas.reset_view, w=72)
         pan_hint = QLabel("  RMB/Middle-drag or scroll to pan·zoom")
-        pan_hint.setStyleSheet(
-            "color:#8b949e; font-family:'Courier New'; font-size:9px;"
-        )
+        pan_hint.setStyleSheet("color:#8b949e; font-family:'Courier New'; font-size:9px;")
 
         for w in [self._btn_zoom_in, self._btn_zoom_out, self._btn_zoom_rst, pan_hint]:
             ztb.addWidget(w)
@@ -935,9 +821,7 @@ class AMRMainWindow(QMainWindow):
         rv.addWidget(self.control_pad, stretch=3)
         root.addLayout(rv, stretch=2)
 
-        # ── Wire buttons ──────────────────────────────────────────────────────
         cp = self.control_pad
-
         cp.btn_fwd.pressed.connect(lambda:   self._set_move("fwd",   True))
         cp.btn_fwd.released.connect(lambda:  self._set_move("fwd",   False))
         cp.btn_bwd.pressed.connect(lambda:   self._set_move("bwd",   True))
@@ -959,73 +843,49 @@ class AMRMainWindow(QMainWindow):
         cp.btn_waypoint.clicked.connect(self._toggle_waypoint_mode)
         cp.btn_clear_wp.clicked.connect(self._clear_waypoints)
 
-        # Waypoint click on map
         self.map_canvas.waypoint_clicked.connect(self._on_waypoint_added)
-
-        # ── Startup overlay: prompt user to set home first ────────────────────
         self._show_home_prompt()
 
-        # ── Timer 50 Hz ───────────────────────────────────────────────────────
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
         self.timer.start(20)
         self.setFocusPolicy(Qt.StrongFocus); self.setFocus()
 
-    # ─────────────────────────────────────────────────────────────────────────
-    #  Home prompt
-    # ─────────────────────────────────────────────────────────────────────────
-
     def _show_home_prompt(self):
-        """Flash the home button gold/pulsing as a hint."""
         self.control_pad.btn_set_home.setStyleSheet("""
-            QPushButton {
-                background: #f9a825;
-                border-radius: 8px;
-                color: #000;
-                font-size: 20px;
-                font-weight: bold;
-                border: 3px solid #fff176;
-            }
+            QPushButton { background: #f9a825; border-radius: 8px; color: #000; font-size: 20px; font-weight: bold; border: 3px solid #fff176; }
             QPushButton:hover { background: #fdd835; }
         """)
-        # Update map label
         self.map_canvas.update()
-
-    # ─────────────────────────────────────────────────────────────────────────
-    #  Actions
-    # ─────────────────────────────────────────────────────────────────────────
 
     def _set_home(self):
         self._home_set = True
         self.map_canvas.set_home(self.bot_x, self.bot_y)
-        # Restore normal yellow style after setting
         self.control_pad.btn_set_home.setStyleSheet("")
         self.control_pad.btn_set_home.setText("✓")
-        # Rebuild proper style
         base, hover = ControlButton._C["yellow"]
         self.control_pad.btn_set_home.setStyleSheet(f"""
-            QPushButton {{
-                background:{base}; border-radius:8px; color:white;
-                font-size:20px; font-weight:bold; border:2px solid {hover};
-            }}
+            QPushButton {{ background:{base}; border-radius:8px; color:white; font-size:20px; font-weight:bold; border:2px solid {hover}; }}
             QPushButton:hover   {{ background:{hover}; }}
             QPushButton:pressed {{ background:white; color:{base}; }}
         """)
         QTimer.singleShot(800, lambda: self.control_pad.btn_set_home.setText("⌂"))
 
     def _stop_and_show_route(self):
-        """Stop all movement → if waypoint following → return to home → show route."""
         self._moving = {k: False for k in self._moving}
         self._following_waypoints = False
         self._wp_mode_active = False
+        self._wp_smooth_v = 0.0
+        self._wp_smooth_w = 0.0
         self.map_canvas.set_waypoint_mode(False)
 
         if self._home_set:
-            # Return to home
             self._returning_home = True
             self.control_pad.btn_stop_route.setText("↩   RETURNING TO HOME...")
         else:
             self._ros.send_cmd(0.0, 0.0)
+            self._last_sent_v = 0.0
+            self._last_sent_w = 0.0
             self.map_canvas.set_mode_overview()
             self.control_pad.btn_stop_route.setText("▶   RESUME  FOLLOW  MODE")
             self.control_pad.btn_stop_route.clicked.disconnect()
@@ -1041,8 +901,7 @@ class AMRMainWindow(QMainWindow):
     def _toggle_waypoint_mode(self):
         if not self._home_set:
             self.control_pad.btn_waypoint.setText("✦   SET HOME FIRST!")
-            QTimer.singleShot(1500, lambda: self.control_pad.btn_waypoint.setText(
-                "✦   WAYPOINT  —  ADD POINTS ON MAP"))
+            QTimer.singleShot(1500, lambda: self.control_pad.btn_waypoint.setText("✦   WAYPOINT  —  ADD POINTS ON MAP"))
             return
 
         self._wp_mode_active = not self._wp_mode_active
@@ -1050,25 +909,22 @@ class AMRMainWindow(QMainWindow):
 
         if self._wp_mode_active:
             self.control_pad.btn_waypoint.setText("✦   WAYPOINT MODE ON  —  CLICK MAP")
-            self.control_pad.btn_waypoint.setStyleSheet(
-                self.control_pad.btn_waypoint.styleSheet().replace("#1a0033", "#4a0072")
-            )
-            # Start following as soon as there's at least 1 waypoint
+            self.control_pad.btn_waypoint.setStyleSheet(self.control_pad.btn_waypoint.styleSheet().replace("#1a0033", "#4a0072"))
             self._following_waypoints = True
         else:
             self.control_pad.btn_waypoint.setText("✦   WAYPOINT  —  ADD POINTS ON MAP")
             self._following_waypoints = len(self.map_canvas.waypoints) > 0
 
     def _on_waypoint_added(self, wx: float, wy: float):
-        """Called when user clicks on map in waypoint mode."""
         n = len(self.map_canvas.waypoints)
         self.control_pad.btn_waypoint.setText(f"✦   WAYPOINT MODE  —  {n} POINT(S)")
-        # Ensure bot starts following from current index
         self._following_waypoints = True
 
     def _clear_waypoints(self):
         self.map_canvas.clear_waypoints()
         self._following_waypoints = False
+        self._wp_smooth_v = 0.0
+        self._wp_smooth_w = 0.0
         self.control_pad.btn_waypoint.setText("✦   WAYPOINT  —  ADD POINTS ON MAP")
 
     def _show_enc_graph(self):
@@ -1076,10 +932,6 @@ class AMRMainWindow(QMainWindow):
             self._enc_dlg.raise_(); self._enc_dlg.activateWindow()
         else:
             self._enc_dlg.show()
-
-    # ─────────────────────────────────────────────────────────────────────────
-    #  Speed
-    # ─────────────────────────────────────────────────────────────────────────
 
     def _adj_lin(self, d):
         self.lin_speed_mod = max(10., min(200., self.lin_speed_mod + d*100))
@@ -1091,17 +943,15 @@ class AMRMainWindow(QMainWindow):
         if not self._hard_stop and self._home_set:
             self._moving[direction] = state
         elif not self._home_set and state:
-            # Flash home button
             self._show_home_prompt()
-
-    # ─────────────────────────────────────────────────────────────────────────
-    #  Waypoint navigation helpers
-    # ─────────────────────────────────────────────────────────────────────────
 
     def _navigate_to(self, target_x: float, target_y: float, dt: float) -> tuple[float, float, bool]:
         """
-        Compute (v, w) to steer towards target.
-        Returns (v, w, reached).
+        Returns (v, w, reached) in ROS-standard frame:
+          v > 0  → forward,  w > 0 → counter-clockwise (left turn)
+        Hardware polarity flip ( final_v = -v ) is applied in _tick ONLY for
+        manual drive.  Waypoint nav sends v/w straight to send_cmd so the flip
+        must NOT be applied again — see _tick for the separation.
         """
         dx = target_x - self.bot_x
         dy = target_y - self.bot_y
@@ -1110,75 +960,108 @@ class AMRMainWindow(QMainWindow):
         if dist < WAYPOINT_REACH_DIST:
             return 0.0, 0.0, True
 
-        # Angle to target in world frame
+        # ── target heading in degrees (matches bot_angle which is degrees from odom yaw) ──
         target_angle = math.degrees(math.atan2(dy, dx))
         angle_diff   = target_angle - self.bot_angle
-
-        # Normalise to [-180, 180]
+        # Normalise to (−180, +180]
         while angle_diff >  180: angle_diff -= 360
         while angle_diff < -180: angle_diff += 360
 
-        lin = BASE_LINEAR_SPEED * self.lin_speed_mod / 100.
-        ang = BASE_ANGULAR_SPEED * self.trn_speed_mod / 100.
+        lin_max = BASE_LINEAR_SPEED  * self.lin_speed_mod / 100.0
+        ang_max = BASE_ANGULAR_SPEED * self.trn_speed_mod / 100.0
 
-        # Proportional angular control, clamp
-        kp_ang = 2.0
-        w = max(-ang, min(ang, math.radians(angle_diff) * kp_ang))
+        # ── Angular P-controller (all in degrees, capped to ang_max) ────────
+        # kp chosen so 45° error → ~half ang_max, 180° → full ang_max
+        KP_ANG = ang_max / 90.0          # e.g. 0.8/90 ≈ 0.0089 rad/s per degree
+        w = KP_ANG * angle_diff          # positive angle_diff → turn left (+w)
+        w = max(-ang_max, min(ang_max, w))
 
-        # Slow down when turning sharply
-        forward_frac = max(0.0, math.cos(math.radians(angle_diff)))
-        v = lin * forward_frac
+        # ── Linear speed: full speed when aligned, slow when turning hard ───
+        # Deadband: if heading error > 30° — turn first, barely creep forward
+        # This prevents the bot driving in the wrong direction while turning.
+        abs_err = abs(angle_diff)
+        if abs_err > 90.0:
+            # Facing completely wrong way — turn on the spot, don't move forward
+            v = 0.0
+        elif abs_err > 30.0:
+            # Partially mis-aligned — creep forward at 20 % while turning
+            v = lin_max * 0.20
+        else:
+            # Well aligned — scale speed with alignment (cos taper)
+            forward_frac = math.cos(math.radians(abs_err))   # 1.0 → ~0.87 over 0–30°
+            # Also slow down as we approach the waypoint (last 0.5 m)
+            slowdown = min(1.0, dist / 0.5)
+            v = lin_max * forward_frac * slowdown
 
         return v, w, False
 
-    # ─────────────────────────────────────────────────────────────────────────
-    #  Tick (50 Hz)
-    # ─────────────────────────────────────────────────────────────────────────
+    def _smooth_wp_vel(self, current: float, target: float, ramp: float) -> float:
+        """Ramp `current` toward `target` by at most `ramp` per call."""
+        diff = target - current
+        if abs(diff) <= ramp:
+            return target
+        return current + math.copysign(ramp, diff)
 
     def _tick(self):
         dt = 0.02
-
         v = w = 0.0
         waypoint_info = "—"
+        is_waypoint_nav = False   # track whether we're in autonomous mode
 
         if not self._hard_stop and self._home_set:
-
-            # ── Waypoint / return-home navigation ────────────────────────────
             mc = self.map_canvas
 
             if self._returning_home:
-                v, w, reached = self._navigate_to(mc.home_x, mc.home_y, dt)
+                is_waypoint_nav = True
+                v_nav, w_nav, reached = self._navigate_to(mc.home_x, mc.home_y, dt)
                 waypoint_info = "RTH"
+                self._wp_smooth_v = self._smooth_wp_vel(self._wp_smooth_v, v_nav, self._WP_LIN_RAMP)
+                self._wp_smooth_w = self._smooth_wp_vel(self._wp_smooth_w, w_nav, self._WP_ANG_RAMP)
+                v, w = self._wp_smooth_v, self._wp_smooth_w
                 if reached:
                     self._returning_home = False
+                    self._wp_smooth_v = 0.0
+                    self._wp_smooth_w = 0.0
                     self._ros.send_cmd(0.0, 0.0)
+                    self._last_sent_v = 0.0
+                    self._last_sent_w = 0.0
                     mc.set_mode_overview()
                     self.control_pad.btn_stop_route.setText("▶   RESUME  FOLLOW  MODE")
-                    try:
-                        self.control_pad.btn_stop_route.clicked.disconnect()
-                    except Exception:
-                        pass
+                    try: self.control_pad.btn_stop_route.clicked.disconnect()
+                    except Exception: pass
                     self.control_pad.btn_stop_route.clicked.connect(self._resume_follow)
 
             elif self._following_waypoints and mc.waypoints:
+                is_waypoint_nav = True
                 idx = mc.current_waypoint_idx
                 if idx < len(mc.waypoints):
                     tx, ty = mc.waypoints[idx]
-                    v, w, reached = self._navigate_to(tx, ty, dt)
+                    v_nav, w_nav, reached = self._navigate_to(tx, ty, dt)
                     waypoint_info = f"{idx+1}/{len(mc.waypoints)}"
+                    self._wp_smooth_v = self._smooth_wp_vel(self._wp_smooth_v, v_nav, self._WP_LIN_RAMP)
+                    self._wp_smooth_w = self._smooth_wp_vel(self._wp_smooth_w, w_nav, self._WP_ANG_RAMP)
+                    v, w = self._wp_smooth_v, self._wp_smooth_w
                     if reached:
                         mc.current_waypoint_idx += 1
+                        # ── DO NOT reset smoothers to 0 here ──
+                        # Keeping current velocity means no stutter between waypoints.
+                        # The smoother will naturally ramp toward the new waypoint's target.
                         if mc.current_waypoint_idx >= len(mc.waypoints):
-                            # All done — wait at last point
                             self._following_waypoints = False
-                            mc.current_waypoint_idx = len(mc.waypoints)  # past end = all done
-                            waypoint_info = "WAIT"
+                            mc.current_waypoint_idx = len(mc.waypoints)
+                            waypoint_info = "DONE"
                 else:
-                    # Waiting at last waypoint
-                    waypoint_info = "WAIT"
+                    is_waypoint_nav = True
+                    # All done — ramp to zero gently
+                    self._wp_smooth_v = self._smooth_wp_vel(self._wp_smooth_v, 0.0, self._WP_LIN_RAMP)
+                    self._wp_smooth_w = self._smooth_wp_vel(self._wp_smooth_w, 0.0, self._WP_ANG_RAMP)
+                    v, w = self._wp_smooth_v, self._wp_smooth_w
+                    waypoint_info = "DONE"
 
             else:
-                # Manual drive
+                # ── Manual drive — reset wp smoothers ───────────────────────
+                self._wp_smooth_v = 0.0
+                self._wp_smooth_w = 0.0
                 lin = BASE_LINEAR_SPEED  * self.lin_speed_mod / 100.
                 ang = BASE_ANGULAR_SPEED * self.trn_speed_mod / 100.
                 if self._moving.get("fwd"):   v += lin
@@ -1186,17 +1069,29 @@ class AMRMainWindow(QMainWindow):
                 if self._moving.get("left"):  w += ang
                 if self._moving.get("right"): w -= ang
 
-        final_v = -v
-        final_w = -w
+        # ── Hardware polarity ────────────────────────────────────────────────
+        # Manual drive: your hardware wiring needs -v to go forward → flip both axes.
+        # Waypoint nav: _navigate_to() already outputs correct ROS-standard polarity
+        #   (positive v = forward), so we must NOT flip — send as-is.
+        if is_waypoint_nav:
+            final_v = v    # navigator output: positive = forward on real bot
+            final_w = w    # navigator output: positive w = left turn
+        else:
+            final_v = -v   # manual: original hardware polarity flip
+            final_w = -w
 
+        # Continuous publishing at 20 Hz — prevents packet-loss stall cycles
         if (v != 0.0 or w != 0.0) and not self._hard_stop:
             self._ros.send_cmd(final_v, final_w)
-        elif not self._returning_home and not self._following_waypoints:
-            if not (self._moving.get("fwd") or self._moving.get("bwd") or
-                    self._moving.get("left") or self._moving.get("right")):
-                pass  # don't spam zero commands
+            self._last_sent_v = final_v
+            self._last_sent_w = final_w
+        else:
+            if not self._hard_stop:
+                if self._last_sent_v != 0.0 or self._last_sent_w != 0.0:
+                    self._ros.send_cmd(0.0, 0.0)
+                    self._last_sent_v = 0.0
+                    self._last_sent_w = 0.0
 
-        # ── Simulation pose integration ────────────────────────────────────
         if not HAS_ROS and not self._hard_stop and self._home_set:
             self.bot_angle += math.degrees(w) * dt
             rad = math.radians(self.bot_angle)
@@ -1216,7 +1111,6 @@ class AMRMainWindow(QMainWindow):
                 if self._enc_dlg.isVisible():
                     self._enc_dlg.push(self._sim_l, self._sim_r, self._sim_d)
 
-        # ── Telemetry ──────────────────────────────────────────────────────
         home_x = self.map_canvas.home_x
         home_y = self.map_canvas.home_y
         dx = self.bot_x - home_x
@@ -1231,10 +1125,6 @@ class AMRMainWindow(QMainWindow):
             trn_mod   = self.trn_speed_mod,
             waypoint_info = waypoint_info,
         )
-
-    # ─────────────────────────────────────────────────────────────────────────
-    #  Keyboard
-    # ─────────────────────────────────────────────────────────────────────────
 
     def keyPressEvent(self, e: QKeyEvent):
         k = e.key()
@@ -1251,7 +1141,6 @@ class AMRMainWindow(QMainWindow):
         if k == Qt.Key_Z:     self._adj_trn(-SPEED_STEP)
         if k == Qt.Key_P:     self._toggle_waypoint_mode()
         if k == Qt.Key_C:     self._clear_waypoints()
-        # Zoom / pan
         if k in (Qt.Key_Plus, Qt.Key_Equal): self.map_canvas.zoom_in()
         if k in (Qt.Key_Minus, Qt.Key_Underscore): self.map_canvas.zoom_out()
         if k == Qt.Key_R:     self.map_canvas.reset_view()
@@ -1269,9 +1158,6 @@ class AMRMainWindow(QMainWindow):
         super().closeEvent(e)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Entry point
-# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
