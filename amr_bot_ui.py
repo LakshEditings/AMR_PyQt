@@ -1,12 +1,3 @@
-#  AMR Bot — 2D Mapping & Control  (PySide6)
-#  CHANGES vs previous version:
-#   1. Home button sets current bot position as home (required before anything works)
-#   2. Waypoints only placeable after home is set
-#   3. Save Waypoints → waypoints_<timestamp>.json in same folder
-#   4. Load Waypoints → reads JSON back in
-#   5. Stop → auto-fits map view to show full path
-#   6. Speed Value display → shows current linear speed mod (steps of 5)
-
 import sys
 import math
 import json
@@ -41,21 +32,17 @@ try:
     HAS_ROS = True
 except ImportError:
     HAS_ROS = False
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 #  Constants
 # ─────────────────────────────────────────────────────────────────────────────
-GRID_SIZE          = 50
+PIXELS_PER_METRE   = 40.0
+GRID_SIZE          = 40.0  # CHANGED: 40 pixels = Exactly 1.0 Metre spatial separation
 BOT_W, BOT_H       = 30, 20
 BASE_LINEAR_SPEED  = 0.5
 BASE_ANGULAR_SPEED = 0.8
-SPEED_STEP         = 5          # ← changed: speed steps are now integer %
+SPEED_STEP         = 5          
 WHEEL_BASE         = 0.40
-PIXELS_PER_METRE   = 40.0
 WAYPOINT_REACH_DIST = 0.15
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 #  Map Canvas
 # ─────────────────────────────────────────────────────────────────────────────
@@ -76,7 +63,7 @@ class MapCanvas(QWidget):
 
         self.home_x = 0.0
         self.home_y = 0.0
-        self.home_set = False          # NEW: track whether home has been set
+        self.home_set = False          
 
         self.trail: list[tuple[float, float]] = []
 
@@ -97,7 +84,6 @@ class MapCanvas(QWidget):
         self._pan_last    = QPointF(0, 0)
         self.setMouseTracking(False)
 
-    # ── coordinate helpers ───────────────────────────────────────────────────
     def _w2c(self, wx, wy):
         cx = self.width()  / 2 + (wx - self._view_ox) * self.scale
         cy = self.height() / 2 - (wy - self._view_oy) * self.scale
@@ -108,12 +94,11 @@ class MapCanvas(QWidget):
         wy = (self.height() / 2 - cy) / self.scale + self._view_oy
         return wx, wy
 
-    # ── public setters ───────────────────────────────────────────────────────
     def set_home(self, x, y):
         self.home_x   = x
         self.home_y   = y
         self.home_set = True
-        self.trail    = [(x, y)]       # reset trail from new home
+        self.trail    = [(x, y)]       
         self.update()
 
     def update_bot(self, x, y, angle):
@@ -133,7 +118,6 @@ class MapCanvas(QWidget):
         self.mode = self.MODE_OVERVIEW
         self.update()
 
-    # NEW: auto-fit view to show entire recorded trail
     def fit_trail_view(self):
         if len(self.trail) < 2:
             self.set_mode_overview()
@@ -142,7 +126,6 @@ class MapCanvas(QWidget):
         self.mode = self.MODE_OVERVIEW
         xs = [p[0] for p in self.trail]
         ys = [p[1] for p in self.trail]
-        # add waypoints and home into the bounding box too
         for wx, wy in self.waypoints:
             xs.append(wx); ys.append(wy)
         xs.append(self.home_x); ys.append(self.home_y)
@@ -167,7 +150,6 @@ class MapCanvas(QWidget):
         self.current_waypoint_idx = 0
         self.update()
 
-    # ── zoom / pan ───────────────────────────────────────────────────────────
     ZOOM_FACTOR = 1.25
 
     def zoom_in(self):
@@ -185,7 +167,6 @@ class MapCanvas(QWidget):
         self.scale = PIXELS_PER_METRE
         self.update()
 
-    # ── mouse events ─────────────────────────────────────────────────────────
     def mousePressEvent(self, event):
         if self.waypoint_mode and event.button() == Qt.LeftButton:
             wx, wy = self._c2w(event.position().x(), event.position().y())
@@ -224,7 +205,6 @@ class MapCanvas(QWidget):
         self._view_oy -= (wy_after - wy_before)
         self.update()
 
-    # ── paint ────────────────────────────────────────────────────────────────
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -237,7 +217,6 @@ class MapCanvas(QWidget):
         self._draw_home(p)
         self._draw_bot(p)
         self._draw_mode_label(p)
-        # NEW: draw "Set Home first" watermark when home not set
         if not self.home_set:
             p.setPen(QPen(QColor(255, 100, 100, 180)))
             p.setFont(QFont("Courier New", 13, QFont.Bold))
@@ -284,30 +263,39 @@ class MapCanvas(QWidget):
 
     def _draw_grid(self, p):
         W, H = self.width(), self.height()
-        step = GRID_SIZE * self.scale / PIXELS_PER_METRE
+        
+        # Calculate dynamic pixel size based on user zoom interaction scale profile
+        step = self.scale
         if step < 6:
-            return
+            return  # Prevents rendering dense grid lines when zoomed out way too far
+            
         p.setPen(QPen(QColor(255, 255, 255, 60), 1, Qt.DotLine))
+        
+        # Calculate viewport bounds in real-world meters
         left_world = self._view_ox - (W / 2) / self.scale
-        x0 = math.ceil(left_world / (GRID_SIZE / PIXELS_PER_METRE)) * (GRID_SIZE / PIXELS_PER_METRE)
-        wx = x0
-        while True:
-            cp = self._w2c(wx, 0)
-            if cp.x() > W: break
-            p.drawLine(int(cp.x()), 0, int(cp.x()), H)
-            wx += GRID_SIZE / PIXELS_PER_METRE
+        right_world = self._view_ox + (W / 2) / self.scale
         bot_world = self._view_oy - (H / 2) / self.scale
-        y0 = math.ceil(bot_world / (GRID_SIZE / PIXELS_PER_METRE)) * (GRID_SIZE / PIXELS_PER_METRE)
-        wy = y0
-        while True:
-            cp = self._w2c(0, wy)
-            if cp.y() < 0: break
+        top_world = self._view_oy + (H / 2) / self.scale
+        
+        # Draw Vertical Grid Lines (1 meter intervals)
+        x_start = math.ceil(left_world)
+        x_end = math.floor(right_world)
+        for wx in range(x_start, x_end + 1):
+            cp = self._w2c(float(wx), 0.0)
+            p.drawLine(int(cp.x()), 0, int(cp.x()), H)
+            
+        # Draw Horizontal Grid Lines (1 meter intervals)
+        y_start = math.ceil(bot_world)
+        y_end = math.floor(top_world)
+        for wy in range(y_start, y_end + 1):
+            cp = self._w2c(0.0, float(wy))
             p.drawLine(0, int(cp.y()), W, int(cp.y()))
-            wy += GRID_SIZE / PIXELS_PER_METRE
+            
+        # Draw Highlighted Origin Axes (Red for X, Green for Y)
         origin = self._w2c(0.0, 0.0)
-        p.setPen(QPen(QColor(220, 50, 50, 210), 1))
+        p.setPen(QPen(QColor(220, 50, 50, 210), 1.5))  # X-Axis Line
         p.drawLine(0, int(origin.y()), W, int(origin.y()))
-        p.setPen(QPen(QColor(50, 220, 80, 210), 1))
+        p.setPen(QPen(QColor(50, 220, 80, 210), 1.5))  # Y-Axis Line
         p.drawLine(int(origin.x()), 0, int(origin.x()), H)
 
     def _draw_lidar(self, p):
@@ -446,7 +434,6 @@ class TelemetryPanel(QFrame):
                 border:1px solid #374151;
                 border-radius:10px;
             }
-
             QLabel#title {
                 color:#60a5fa;
                 font-family:'Segoe UI';
@@ -454,7 +441,6 @@ class TelemetryPanel(QFrame):
                 font-weight:700;
                 border:none;
             }
-
             QLabel#label {
                 color:#d1d5db;
                 font-family:'Segoe UI';
@@ -463,7 +449,6 @@ class TelemetryPanel(QFrame):
                 letter-spacing:1px;
                 border:none;
             }
-
             QLabel#value {
                 color:#22c55e;
                 font-family:'Consolas';
@@ -475,7 +460,6 @@ class TelemetryPanel(QFrame):
                 border-radius:6px;
                 padding:6px 14px;
             }
-
             QLabel#unit {
                 color:#9ca3af;
                 font-family:'Segoe UI';
@@ -484,10 +468,8 @@ class TelemetryPanel(QFrame):
                 min-width:38px;
                 border:none;
             }
-
             QWidget#row {
                 background:#0f172a;
-
                 border:1px solid #1f2937;
                 border-radius:8px;
             }
@@ -515,7 +497,6 @@ class TelemetryPanel(QFrame):
         ]
 
         for label, unit, key in telemetry_items:
-
             row = QWidget()
             row.setObjectName("row")
 
@@ -540,22 +521,11 @@ class TelemetryPanel(QFrame):
             rl.addWidget(ul)
 
             main.addWidget(row)
-
             self.fields[key] = vl
 
         main.addStretch()
 
-    def update_telemetry(
-        self,
-        x,
-        y,
-        angle,
-        speed,
-        ang_speed,
-        lin_mod,
-        trn_mod,
-        waypoint_info="—"
-    ):
+    def update_telemetry(self, x, y, angle, speed, ang_speed, lin_mod, trn_mod, waypoint_info="—"):
         self.fields["x_dist"].setText(f"{x:+.2f}")
         self.fields["y_dist"].setText(f"{y:+.2f}")
         self.fields["angle"].setText(f"{angle:.1f}")
@@ -565,17 +535,14 @@ class TelemetryPanel(QFrame):
         self.fields["trn_mod"].setText(f"{trn_mod:.0f}")
         self.fields["waypoint"].setText(waypoint_info)
         
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  Speed Value Display  (NEW)
-#  Shows the current speed-mod percentage; updated live from the main window.
+#  Speed Value Display
 # ─────────────────────────────────────────────────────────────────────────────
 class SpeedValueDisplay(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
-
-        # SMALLER HEIGHT
         self.setFixedSize(145, 105)
-
         self.setStyleSheet("""
             QFrame {
                 background:qlineargradient(
@@ -583,21 +550,17 @@ class SpeedValueDisplay(QFrame):
                     stop:0 #180028,
                     stop:1 #2b0040
                 );
-
                 border:2px solid #9333ea;
                 border-radius:16px;
             }
         """)
 
         lay = QVBoxLayout(self)
-
-        # IMPORTANT
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(2)
 
         top = QLabel("SPEED")
         top.setAlignment(Qt.AlignCenter)
-
         top.setStyleSheet("""
             color:#d8b4fe;
             font-family:'Segoe UI';
@@ -605,32 +568,24 @@ class SpeedValueDisplay(QFrame):
             font-weight:700;
             border:none;
         """)
-
         lay.addWidget(top)
 
         self._val_lbl = QLabel("100")
         self._val_lbl.setAlignment(Qt.AlignCenter)
-
         self._val_lbl.setStyleSheet("""
             color:#f5d0fe;
-
             font-family:'JetBrains Mono';
             font-size:42px;
             font-weight:900;
-
             letter-spacing:2px;
-
             border:none;
-
             padding-top:0px;
             padding-bottom:0px;
         """)
-
         lay.addWidget(self._val_lbl)
 
         bot = QLabel("%")
         bot.setAlignment(Qt.AlignCenter)
-
         bot.setStyleSheet("""
             color:#c084fc;
             font-family:'Segoe UI';
@@ -638,11 +593,11 @@ class SpeedValueDisplay(QFrame):
             font-weight:700;
             border:none;
         """)
-
         lay.addWidget(bot)
 
     def set_value(self, v: float):
         self._val_lbl.setText(f"{v:.0f}")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Control Pad
@@ -666,12 +621,10 @@ class ControlPad(QFrame):
         )
         outer.addWidget(ttl, alignment=Qt.AlignCenter)
 
-        # ── TOP SECTION: D-pad LEFT | divider | Speed display + Stop RIGHT ──
         top_body = QHBoxLayout()
         top_body.setSpacing(10)
         top_body.setContentsMargins(0, 0, 0, 0)
 
-        # D-pad (3×3 grid)
         SZ = 68
         self.btn_fwd      = ControlButton("▲", "red",    size=SZ)
         self.btn_bwd      = ControlButton("▼", "red",    size=SZ)
@@ -695,13 +648,11 @@ class ControlPad(QFrame):
         left_panel.setLayout(dpad)
         top_body.addWidget(left_panel)
 
-        # Divider
         div = QFrame(); div.setFrameShape(QFrame.VLine)
         div.setStyleSheet("color:#30363d; background:#30363d;")
         div.setFixedWidth(1)
         top_body.addWidget(div)
 
-        # Speed display + Stop button stacked on the right
         self.speed_display = SpeedValueDisplay()
         self.btn_stop = QPushButton("Stop")
         self.btn_stop.setFixedSize(120, 44)
@@ -727,19 +678,12 @@ class ControlPad(QFrame):
 
         outer.addLayout(top_body)
 
-        # ── Thin separator ───────────────────────────────────────────────────
         sep = QFrame(); sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet("color:#1e2d3d; background:#1e2d3d;")
         sep.setFixedHeight(1)
         outer.addWidget(sep)
 
-        # ── 2 × 4 BUTTON GRID ───────────────────────────────────────────────
-        # Row 0: Speed+      | Speed-
-        # Row 1: Waypoint    | Clear WPs
-        # Row 2: Save WP     | Load WP
-        # Row 3: Enc. Graph  | (full width)
-
-        BW, BH = 0, 46   # width=0 → stretch; height fixed
+        BH = 46   
 
         def _gb(text, bg, hover, color="white"):
             b = QPushButton(text)
@@ -760,13 +704,13 @@ class ControlPad(QFrame):
 
         self.btn_spd_up   = _gb("Speed  +",        "#004d40", "#26a69a")
         self.btn_spd_dn   = _gb("Speed  −",        "#004d40", "#26a69a")
+        self.btn_r1       = _gb("R1  ＋5",          "#1a003a", "#7c3aed", "#d8b4fe")
+        self.btn_l1       = _gb("L1  −5",           "#1a003a", "#7c3aed", "#d8b4fe")
         self.btn_waypoint = _gb("Waypoint",         "#1a1200", "#f9a825", "#f9a825")
         self.btn_clear_wp = _gb("Clear WPs",        "#1a1200", "#f9a825", "#f9a825")
         self.btn_save_wp  = _gb("💾  Save WP",      "#3b0000", "#c62828", "#ff8a80")
         self.btn_load_wp  = _gb("📂  Load WP",      "#003060", "#1565c0", "#82b1ff")
-        self.btn_encoder_graph = _gb(
-            "📊  Encoder Graph", "#003d1a", "#00c853", "#39d353"
-        )
+        self.btn_encoder_graph = _gb("📊  Encoder Graph", "#003d1a", "#00c853", "#39d353")
 
         grid = QGridLayout()
         grid.setSpacing(self.GAP_PX)
@@ -774,19 +718,18 @@ class ControlPad(QFrame):
 
         grid.addWidget(self.btn_spd_up,      0, 0)
         grid.addWidget(self.btn_spd_dn,      0, 1)
-        grid.addWidget(self.btn_waypoint,    1, 0)
-        grid.addWidget(self.btn_clear_wp,    1, 1)
-        grid.addWidget(self.btn_save_wp,     2, 0)
-        grid.addWidget(self.btn_load_wp,     2, 1)
-        grid.addWidget(self.btn_encoder_graph, 3, 0, 1, 2)   # spans both cols
+        grid.addWidget(self.btn_r1,          1, 0)   
+        grid.addWidget(self.btn_l1,          1, 1)   
+        grid.addWidget(self.btn_waypoint,    2, 0)   
+        grid.addWidget(self.btn_clear_wp,    2, 1)   
+        grid.addWidget(self.btn_save_wp,     3, 0)   
+        grid.addWidget(self.btn_load_wp,     3, 1)   
+        grid.addWidget(self.btn_encoder_graph, 4, 0, 1, 2)   
 
-        # Equal column widths
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
-
         outer.addLayout(grid)
 
-        # ── Legend ───────────────────────────────────────────────────────────
         def leg_lbl(txt, clr):
             l = QLabel(txt)
             l.setStyleSheet(f"color:{clr}; font-family:'Courier New'; font-size:9px;")
@@ -798,6 +741,7 @@ class ControlPad(QFrame):
         lg.addStretch()
         outer.addLayout(lg)
         
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Encoder Graph Popup
 # ─────────────────────────────────────────────────────────────────────────────
@@ -820,19 +764,14 @@ class EncoderGraphDialog(QDialog):
         src_color = "#39d353" if HAS_ROS else "#f0a500"
         src_text  = "● ROS2 /odom LIVE" if HAS_ROS else "● SIMULATION MODE"
         src_lbl   = QLabel(src_text)
-        src_lbl.setStyleSheet(
-            f"color:{src_color}; font-family:'Courier New'; font-size:10px; font-weight:bold;"
-        )
+        src_lbl.setStyleSheet(f"color:{src_color}; font-family:'Courier New'; font-size:10px; font-weight:bold;")
         hdr.addWidget(src_lbl)
         layout.addLayout(hdr)
 
         leg = QHBoxLayout()
         for clr, txt in [("#00c853", "━━  LEFT MOTOR"), ("#2979ff", "━━  RIGHT MOTOR")]:
             l = QLabel(txt)
-            l.setStyleSheet(
-                f"color:{clr}; font-family:'Courier New'; font-size:10px; "
-                f"font-weight:bold; padding-right:20px;"
-            )
+            l.setStyleSheet(f"color:{clr}; font-family:'Courier New'; font-size:10px; font-weight:bold; padding-right:20px;")
             leg.addWidget(l)
         leg.addStretch()
         layout.addLayout(leg)
@@ -939,6 +878,7 @@ class RealOdomSubscriber:
         if hasattr(self, "_log"):
             self._log.close()
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Control Buttons
 # ─────────────────────────────────────────────────────────────────────────────
@@ -957,64 +897,18 @@ class ControlButton(QPushButton):
 
     def __init__(self, label, color="red", parent=None, size=52, font_size=None):
         super().__init__(label, parent)
-
         base, hover = self._C.get(color, self._C["red"])
         fs = font_size or max(11, size // 3)
-
         self.setFixedSize(size, size)
-
         self.setStyleSheet(f"""
             QPushButton {{
-                background:{base};
-                border-radius:12px;
-                color:white;
-                font-size:{fs}px;
-                font-weight:bold;
-                border:2px solid {hover};
+                background:{base}; border-radius:12px; color:white;
+                font-size:{fs}px; font-weight:bold; border:2px solid {hover};
             }}
-
-            QPushButton:hover {{
-                background:{hover};
-            }}
-
-            QPushButton:pressed {{
-                background:white;
-                color:{base};
-            }}
+            QPushButton:hover {{ background:{hover}; }}
+            QPushButton:pressed {{ background:white; color:{base}; }}
         """)
-
         self.setFocusPolicy(Qt.NoFocus)
-
-
-def wide_btn(text, bg, hover, text_color="white", height=36) -> QPushButton:
-    b = QPushButton(text)
-
-    b.setFixedHeight(height)
-    b.setFocusPolicy(Qt.NoFocus)
-
-    b.setStyleSheet(f"""
-        QPushButton {{
-            background:{bg};
-            color:{text_color};
-            border:2px solid {hover};
-            border-radius:10px;
-            font-family:'Segoe UI';
-            font-size:12px;
-            font-weight:700;
-            padding:6px;
-        }}
-
-        QPushButton:hover {{
-            background:{hover};
-            color:white;
-        }}
-
-        QPushButton:pressed {{
-            background:#000;
-        }}
-    """)
-
-    return b
 
 class _OdomNode(Node):
     def __init__(self, subscriber):
@@ -1022,29 +916,73 @@ class _OdomNode(Node):
         self.sub_ref = subscriber
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel", 10)
         self.create_subscription(Odometry, "/odom", self._cb, 10)
+        # Fix: Subscribe to cmd_vel to read controller labels in real time
+        self.create_subscription(Twist, "/cmd_vel", self._cmd_vel_cb, 10)
+
+    def _cmd_vel_cb(self, msg):
+        vx = msg.linear.x
+        wz = msg.angular.z
+        
+        if vx == 0.0 and wz == 0.0:
+            self.sub_ref.last_command = "Stop"
+        elif vx > 0.0:
+            self.sub_ref.last_command = "Forward"
+        elif vx < 0.0:
+            self.sub_ref.last_command = "Reverse"
+        elif wz > 0.0:
+            self.sub_ref.last_command = "Left"
+        elif wz < 0.0:
+            self.sub_ref.last_command = "Right"
 
     def _cb(self, msg):
         mw = self.sub_ref.mw
         cx = msg.pose.pose.position.x
         cy = msg.pose.pose.position.y
+
         if self.sub_ref._last_x is None:
-            self.sub_ref._last_x = cx; self.sub_ref._last_y = cy
-        dx = cx - self.sub_ref._last_x; dy = cy - self.sub_ref._last_y
+            self.sub_ref._last_x = cx
+            self.sub_ref._last_y = cy
+            return                        
+
+        dx = cx - self.sub_ref._last_x
+        dy = cy - self.sub_ref._last_y
         dist = math.hypot(dx, dy)
-        self.sub_ref.total_dist += dist
-        self.sub_ref._last_x = cx; self.sub_ref._last_y = cy
-        v  = msg.twist.twist.linear.x; w = msg.twist.twist.angular.z
+
+        if dist < 0.5:                    
+            self.sub_ref.total_dist += dist
+
+        self.sub_ref._last_x = cx
+        self.sub_ref._last_y = cy
+
+        v  = msg.twist.twist.linear.x
+        w  = msg.twist.twist.angular.z
         hw = WHEEL_BASE / 2.0
-        self.sub_ref.left_enc  += (v - w * hw) * 0.02
-        self.sub_ref.right_enc += (v + w * hw) * 0.02
+
+        now_ns = msg.header.stamp.sec * 1e9 + msg.header.stamp.nanosec
+        if not hasattr(self, '_last_stamp_ns'):
+            self._last_stamp_ns = now_ns
+        dt = max(0.001, min(0.1, (now_ns - self._last_stamp_ns) / 1e9))
+        self._last_stamp_ns = now_ns
+        self.sub_ref.left_enc  += (v - w * hw) * dt
+        self.sub_ref.right_enc += (v + w * hw) * dt
+
         q   = msg.pose.pose.orientation
-        yaw = math.degrees(math.atan2(2*(q.w*q.z + q.x*q.y), 1 - 2*(q.y*q.y + q.z*q.z)))
+        yaw = math.degrees(math.atan2(
+            2*(q.w*q.z + q.x*q.y),
+            1 - 2*(q.y*q.y + q.z*q.z)
+        ))
         mw.bot_x = cx; mw.bot_y = cy; mw.bot_angle = yaw
-        mw.current_speed = abs(v); mw.current_ang_speed = abs(math.degrees(w))
+        mw.current_speed = abs(v)
+        mw.current_ang_speed = abs(math.degrees(w))
         mw.map_canvas.update_bot(cx, cy, yaw)
+
         if mw._enc_dlg.isVisible():
-            mw._enc_dlg.push(self.sub_ref.left_enc, self.sub_ref.right_enc,
-                              self.sub_ref.total_dist)
+            mw._enc_dlg.push(
+                self.sub_ref.left_enc,
+                self.sub_ref.right_enc,
+                self.sub_ref.total_dist
+            )
+
         ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.sub_ref._csv.writerow([
             ts,
@@ -1054,11 +992,10 @@ class _OdomNode(Node):
             round(self.sub_ref.right_enc,  4),
         ])
         self.sub_ref._log.flush()
-
+        
     def send_cmd(self, lx, az):
         msg = Twist(); msg.linear.x = float(lx); msg.angular.z = float(az)
         self.cmd_pub.publish(msg)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Main Window
@@ -1076,7 +1013,7 @@ class AMRMainWindow(QMainWindow):
         self.bot_angle         = 0.0
         self.current_speed     = 0.0
         self.current_ang_speed = 0.0
-        self.lin_speed_mod     = 100.0    # starts at 100
+        self.lin_speed_mod     = 100.0    
         self.trn_speed_mod     = 100.0
         self._moving           = {"fwd": False, "bwd": False, "left": False, "right": False}
         self._hard_stop        = False
@@ -1103,15 +1040,10 @@ class AMRMainWindow(QMainWindow):
 
         # ── Map panel ────────────────────────────────────────────────────────
         lf = QFrame()
-        lf.setStyleSheet(
-            "QFrame{background:#0d1117;border:1px solid #30363d;border-radius:10px;}"
-        )
+        lf.setStyleSheet("QFrame{background:#0d1117;border:1px solid #30363d;border-radius:10px;}")
         lv = QVBoxLayout(lf); lv.setContentsMargins(8, 8, 8, 8); lv.setSpacing(4)
         mt = QLabel("◉  LIVE 2D MAP   —   AMR POSITION TRACKING")
-        mt.setStyleSheet(
-            "color:#58a6ff;font-family:'Courier New';font-size:11px;font-weight:bold;"
-            "letter-spacing:2px;padding:4px;"
-        )
+        mt.setStyleSheet("color:#58a6ff;font-family:'Courier New';font-size:11px;font-weight:bold;letter-spacing:2px;padding:4px;")
         lv.addWidget(mt)
         self.map_canvas = MapCanvas()
         lv.addWidget(self.map_canvas)
@@ -1134,9 +1066,7 @@ class AMRMainWindow(QMainWindow):
             return b
 
         lbl_map = QLabel("🔍  MAP VIEW")
-        lbl_map.setStyleSheet(
-            "color:#58a6ff; font-family:'Courier New'; font-size:10px; font-weight:bold;"
-        )
+        lbl_map.setStyleSheet("color:#58a6ff; font-family:'Courier New'; font-size:10px; font-weight:bold;")
         ztb.addWidget(lbl_map); ztb.addStretch()
         self._btn_zoom_in  = _zb("＋ ZOOM IN",  "Zoom in  [+]",   ("#0d4f1c","#43a047"), self.map_canvas.zoom_in,   w=84)
         self._btn_zoom_out = _zb("－ ZOOM OUT", "Zoom out  [−]",  ("#1a1a4f","#42a5f5"), self.map_canvas.zoom_out,  w=84)
@@ -1158,29 +1088,27 @@ class AMRMainWindow(QMainWindow):
 
         # ── Wire buttons ─────────────────────────────────────────────────────
         cp = self.control_pad
-        cp.btn_fwd.pressed.connect(lambda:    self._set_move("fwd",   True))
-        cp.btn_fwd.released.connect(lambda:   self._set_move("fwd",   False))
-        cp.btn_bwd.pressed.connect(lambda:    self._set_move("bwd",   True))
-        cp.btn_bwd.released.connect(lambda:   self._set_move("bwd",   False))
+        cp.btn_fwd.clicked.connect(lambda: self._timed_move_1m("fwd"))
+        cp.btn_bwd.clicked.connect(lambda: self._timed_move_1m("bwd"))
         cp.btn_left.pressed.connect(lambda:   self._set_move("left",  True))
         cp.btn_left.released.connect(lambda:  self._set_move("left",  False))
         cp.btn_right.pressed.connect(lambda:  self._set_move("right", True))
         cp.btn_right.released.connect(lambda: self._set_move("right", False))
 
         cp.btn_set_home.clicked.connect(self._set_home)
-
-        # Stop button → auto-fit path
         cp.btn_stop.clicked.connect(self._stop_and_fit_path)
 
         cp.btn_spd_up.clicked.connect(lambda: self._adj_lin(+SPEED_STEP))
         cp.btn_spd_dn.clicked.connect(lambda: self._adj_lin(-SPEED_STEP))
+        
+        cp.btn_r1.clicked.connect(lambda: (self._adj_lin(+5), self._adj_trn(+5)))
+        cp.btn_l1.clicked.connect(lambda: (self._adj_lin(-5), self._adj_trn(-5)))
 
         cp.btn_encoder_graph.clicked.connect(self._show_enc_graph)
         cp.btn_waypoint.clicked.connect(self._toggle_waypoint_mode)
         cp.btn_clear_wp.clicked.connect(self._clear_waypoints)
-
-        cp.btn_save_wp.clicked.connect(self._save_waypoints)   # NEW
-        cp.btn_load_wp.clicked.connect(self._load_waypoints)   # NEW
+        cp.btn_save_wp.clicked.connect(self._save_waypoints)   
+        cp.btn_load_wp.clicked.connect(self._load_waypoints)   
 
         self.map_canvas.waypoint_clicked.connect(self._on_waypoint_added)
         self._show_home_prompt()
@@ -1203,10 +1131,8 @@ class AMRMainWindow(QMainWindow):
         """)
 
     def _set_home(self):
-        """Sets the bot's CURRENT position as home. Everything gates on this."""
         self._home_set = True
         self.map_canvas.set_home(self.bot_x, self.bot_y)
-        # Reset style to normal yellow
         base, hover = ControlButton._C["yellow"]
         self.control_pad.btn_set_home.setStyleSheet(f"""
             QPushButton {{ background:{base}; border-radius:8px; color:white;
@@ -1218,10 +1144,9 @@ class AMRMainWindow(QMainWindow):
         QTimer.singleShot(800, lambda: self.control_pad.btn_set_home.setText("⌂"))
 
     # ─────────────────────────────────────────────────────────────────────────
-    #  Stop → auto-fit path  (NEW behaviour)
+    #  Stop → auto-fit path  
     # ─────────────────────────────────────────────────────────────────────────
     def _stop_and_fit_path(self):
-        """Stop everything, then auto-zoom/pan the map to show the full path."""
         self._moving           = {k: False for k in self._moving}
         self._following_waypoints = False
         self._returning_home   = False
@@ -1232,14 +1157,11 @@ class AMRMainWindow(QMainWindow):
         self._ros.send_cmd(0.0, 0.0, "Stop")
         self._last_sent_v = 0.0
         self._last_sent_w = 0.0
-
-        # Auto-fit the view to the recorded trail
         self.map_canvas.fit_trail_view()
 
-        # Re-wire Stop button to act as a "resume follow" toggle
         self.control_pad.btn_stop.setText("▶ Resume")
         self.control_pad.btn_stop.clicked.disconnect()
-        self.control_pad.btn_stop.clicked.connect(self._resume_follow)
+        self.control_pad.btn_stop.clicked.connect(self._stop_and_fit_path)
 
     def _resume_follow(self):
         self.map_canvas.set_mode_follow()
@@ -1277,7 +1199,7 @@ class AMRMainWindow(QMainWindow):
         self.control_pad.btn_waypoint.setText("Waypoint")
 
     # ─────────────────────────────────────────────────────────────────────────
-    #  Save / Load Waypoints  (NEW)
+    #  Save / Load Waypoints  
     # ─────────────────────────────────────────────────────────────────────────
     def _save_waypoints(self):
         wps = self.map_canvas.waypoints
@@ -1287,13 +1209,9 @@ class AMRMainWindow(QMainWindow):
             return
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         default_name = f"waypoints_{timestamp}.json"
-        # Save in the same directory as this script
         script_dir   = os.path.dirname(os.path.abspath(__file__))
         default_path = os.path.join(script_dir, default_name)
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save Waypoints", default_path,
-            "JSON Files (*.json);;All Files (*)"
-        )
+        path, _ = QFileDialog.getSaveFileName(self, "Save Waypoints", default_path, "JSON Files (*.json);;All Files (*)")
         if not path:
             return
         data = {
@@ -1313,10 +1231,7 @@ class AMRMainWindow(QMainWindow):
             QTimer.singleShot(1500, lambda: self.control_pad.btn_load_wp.setText("📂  Load Waypoint"))
             return
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Load Waypoints", script_dir,
-            "JSON Files (*.json);;All Files (*)"
-        )
+        path, _ = QFileDialog.getOpenFileName(self, "Load Waypoints", script_dir, "JSON Files (*.json);;All Files (*)")
         if not path:
             return
         try:
@@ -1343,7 +1258,6 @@ class AMRMainWindow(QMainWindow):
             self._enc_dlg.show()
 
     def _adj_lin(self, d: int):
-        """Adjust linear speed modifier by ±SPEED_STEP (integer %)."""
         self.lin_speed_mod = max(10.0, min(200.0, self.lin_speed_mod + d))
         self.control_pad.speed_display.set_value(self.lin_speed_mod)
 
@@ -1356,9 +1270,29 @@ class AMRMainWindow(QMainWindow):
         elif not self._home_set and state:
             self._show_home_prompt()
 
-    # ─────────────────────────────────────────────────────────────────────────
-    #  Navigator (unchanged from original)
-    # ─────────────────────────────────────────────────────────────────────────
+    def _timed_move_1m(self, direction: str):
+        if self._hard_stop or not self._home_set:
+            return
+        if hasattr(self, '_timed_move_timer') and self._timed_move_timer.isActive():
+            self._timed_move_timer.stop()
+            self._moving = {k: False for k in self._moving}
+
+        speed = BASE_LINEAR_SPEED * self.lin_speed_mod / 100.0
+        duration_ms = int((1.0 / speed) * 1000)   
+
+        self._moving[direction] = True
+
+        self._timed_move_timer = QTimer()
+        self._timed_move_timer.setSingleShot(True)
+        self._timed_move_timer.timeout.connect(lambda: self._end_timed_move(direction))
+        self._timed_move_timer.start(duration_ms)
+
+    def _end_timed_move(self, direction: str):
+        self._moving[direction] = False
+        self._ros.send_cmd(0.0, 0.0, "Stop")
+        self._last_sent_v = 0.0
+        self._last_sent_w = 0.0
+
     def _navigate_to(self, target_x, target_y, dt):
         dx   = target_x - self.bot_x
         dy   = target_y - self.bot_y
@@ -1443,10 +1377,13 @@ class AMRMainWindow(QMainWindow):
                 self._wp_smooth_v = 0.0; self._wp_smooth_w = 0.0
                 lin = BASE_LINEAR_SPEED  * self.lin_speed_mod / 100.
                 ang = BASE_ANGULAR_SPEED * self.trn_speed_mod / 100.
+                
                 if self._moving.get("fwd"):   v += lin
                 if self._moving.get("bwd"):   v -= lin
-                if self._moving.get("left"):  w += ang
-                if self._moving.get("right"): w -= ang
+                
+                if self._moving.get("left"):  w -= ang
+                if self._moving.get("right"): w += ang
+                
                 parts = []
                 if self._moving.get("fwd"):   parts.append("Forward")
                 if self._moving.get("bwd"):   parts.append("Reverse")
@@ -1454,8 +1391,7 @@ class AMRMainWindow(QMainWindow):
                 if self._moving.get("right"): parts.append("Right")
                 _cmd_label = "+".join(parts) if parts else "Stop"
 
-        # Polarity fix (hardware: -v = forward)
-        final_v = -v
+        final_v =  v
         final_w =  w
 
         if (v != 0.0 or w != 0.0) and not self._hard_stop:
@@ -1467,12 +1403,11 @@ class AMRMainWindow(QMainWindow):
                     self._ros.send_cmd(0.0, 0.0, "Stop")
                     self._last_sent_v = 0.0; self._last_sent_w = 0.0
 
-        # Simulation
         if not HAS_ROS and not self._hard_stop and self._home_set:
-            self.bot_angle += math.degrees(w) * dt
+            self.bot_angle += math.degrees(-w) * dt
             rad = math.radians(self.bot_angle)
-            self.bot_x += v * math.cos(rad) * dt
-            self.bot_y += v * math.sin(rad) * dt
+            self.bot_x += (-v) * math.cos(rad) * dt
+            self.bot_y += (-v) * math.sin(rad) * dt
             self.current_speed     = abs(v)
             self.current_ang_speed = abs(math.degrees(w))
             if self.map_canvas.mode == MapCanvas.MODE_FOLLOW:
@@ -1485,10 +1420,8 @@ class AMRMainWindow(QMainWindow):
                 if self._enc_dlg.isVisible():
                     self._enc_dlg.push(self._sim_l, self._sim_r, self._sim_d)
 
-        # Speed display update
         self.control_pad.speed_display.set_value(self.lin_speed_mod)
 
-        # Telemetry
         home_x = self.map_canvas.home_x
         home_y = self.map_canvas.home_y
         dx = self.bot_x - home_x
@@ -1539,9 +1472,6 @@ class AMRMainWindow(QMainWindow):
         super().closeEvent(e)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Entry point
-# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
