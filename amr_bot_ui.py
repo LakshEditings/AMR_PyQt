@@ -227,33 +227,22 @@ class MapCanvas(QWidget):
         if self._manual_view:
             return
         W, H = self.width(), self.height()
+        
         if self.mode == self.MODE_FOLLOW:
+            # Anchor calculations squarely over the bot frame position
             self._view_ox = self.bot_x
             self._view_oy = self.bot_y
-            if len(self.trail) > 1:
-                max_reach = max(
-                    math.hypot(tx - self.bot_x, ty - self.bot_y)
-                    for tx, ty in self.trail
-                )
-                half_vp     = min(W, H) / 2 * 0.70
-                needed_scale = half_vp / max_reach if max_reach > 0 else PIXELS_PER_METRE
-                self.scale  = min(self.scale, max(needed_scale, 4.0))
         else:
             all_pts = self.trail + self.waypoints + [(self.bot_x, self.bot_y)]
             if len(all_pts) < 2:
                 self._view_ox = self.bot_x
                 self._view_oy = self.bot_y
-                self.scale    = PIXELS_PER_METRE
                 return
             xs = [t[0] for t in all_pts]; ys = [t[1] for t in all_pts]
             x_min, x_max = min(xs), max(xs)
             y_min, y_max = min(ys), max(ys)
             self._view_ox = (x_min + x_max) / 2
             self._view_oy = (y_min + y_max) / 2
-            span_x = (x_max - x_min) or 0.1
-            span_y = (y_max - y_min) or 0.1
-            sx = W * 0.85 / span_x; sy = H * 0.85 / span_y
-            self.scale = max(min(sx, sy), 2.0)
 
     def _draw_bg(self, p):
         g = QLinearGradient(0, 0, 0, self.height())
@@ -986,10 +975,10 @@ class _OdomNode(Node):
         ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.sub_ref._csv.writerow([
             ts,
-            self.sub_ref.last_command,
-            round(self.sub_ref.total_dist, 4),
-            round(self.sub_ref.left_enc,   4),
-            round(self.sub_ref.right_enc,  4),
+            f"  {self.sub_ref.last_command}",
+            f"  {round(self.sub_ref.total_dist, 4)}",
+            f"  {round(self.sub_ref.left_enc,   4)}",
+            f"  {round(self.sub_ref.right_enc,  4)}",
         ])
         self.sub_ref._log.flush()
         
@@ -1132,7 +1121,18 @@ class AMRMainWindow(QMainWindow):
 
     def _set_home(self):
         self._home_set = True
+        
+        # Capture current layout vectors as the absolute origin context points
         self.map_canvas.set_home(self.bot_x, self.bot_y)
+        
+        # Reset relative dead-reckoning vectors to start perfectly at 0.0 center
+        self._sim_l = self._sim_r = self._sim_d = 0.0
+        
+        # Force canvas orientation to re-focus center constraints squarely on the bot
+        self.map_canvas._manual_view = False
+        self.map_canvas.set_mode_follow()
+        
+        # Visual feedback on button click
         base, hover = ControlButton._C["yellow"]
         self.control_pad.btn_set_home.setStyleSheet(f"""
             QPushButton {{ background:{base}; border-radius:8px; color:white;
@@ -1297,25 +1297,36 @@ class AMRMainWindow(QMainWindow):
         dx   = target_x - self.bot_x
         dy   = target_y - self.bot_y
         dist = math.hypot(dx, dy)
+        
+        # Check if destination radius threshold has been reached
         if dist < WAYPOINT_REACH_DIST:
             return 0.0, 0.0, True
+
+        # Calculate exact target headings
         target_angle = math.degrees(math.atan2(dy, dx))
         angle_diff   = target_angle - self.bot_angle
+        
+        # Normalize orientation tracking within [-180, 180]
         while angle_diff >  180: angle_diff -= 360
         while angle_diff < -180: angle_diff += 360
+
         lin_max = BASE_LINEAR_SPEED  * self.lin_speed_mod / 100.0
         ang_max = BASE_ANGULAR_SPEED * self.trn_speed_mod / 100.0
-        KP_ANG  = ang_max / 90.0
-        w = max(-ang_max, min(ang_max, KP_ANG * angle_diff))
-        abs_err = abs(angle_diff)
-        if abs_err > 90.0:
+        
+        # Proportional rotational scaling coefficient
+        KP_ANG  = 2.5  
+        w_val = max(-ang_max, min(ang_max, KP_ANG * math.radians(angle_diff)))
+
+        # ── SEQUENTIAL STATE MACHINE DESIGN ──────────────────────────────────
+        # Phase 1: If heading error is greater than 3 degrees, perform an in-place sharp turn
+        if abs(angle_diff) > 3.0:
             v = 0.0
-        elif abs_err > 30.0:
-            v = lin_max * 0.20
+            w = w_val
         else:
-            forward_frac = math.cos(math.radians(abs_err))
-            slowdown     = min(1.0, dist / 0.5)
-            v = lin_max * forward_frac * slowdown
+            # Phase 2: Heading aligned perfectly -> drive straight ahead
+            v = lin_max * min(1.0, dist / 0.4)  # Smooth slowdown ramp close to target
+            w = w_val * 0.1                     # Minimal micro-corrections while tracking straight
+            
         return v, w, False
 
     def _smooth_wp_vel(self, current, target, ramp):
@@ -1323,7 +1334,6 @@ class AMRMainWindow(QMainWindow):
         if abs(diff) <= ramp:
             return target
         return current + math.copysign(ramp, diff)
-
     # ─────────────────────────────────────────────────────────────────────────
     #  20 Hz tick
     # ─────────────────────────────────────────────────────────────────────────
