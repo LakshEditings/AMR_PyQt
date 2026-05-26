@@ -1,0 +1,40 @@
+[0.000000] (-) TimerEvent: {}
+[0.001054] (my-test-package) JobQueued: {'identifier': 'my-test-package', 'dependencies': OrderedDict()}
+[0.001141] (my-test-package) JobStarted: {'identifier': 'my-test-package'}
+[0.099663] (-) TimerEvent: {}
+[0.200079] (-) TimerEvent: {}
+[0.300505] (-) TimerEvent: {}
+[0.400846] (-) TimerEvent: {}
+[0.501258] (-) TimerEvent: {}
+[0.601662] (-) TimerEvent: {}
+[0.702034] (-) TimerEvent: {}
+[0.802462] (-) TimerEvent: {}
+[0.902852] (-) TimerEvent: {}
+[1.003336] (-) TimerEvent: {}
+[1.103711] (-) TimerEvent: {}
+[1.204112] (-) TimerEvent: {}
+[1.304596] (-) TimerEvent: {}
+[1.388827] (my-test-package) Command: {'cmd': ['/usr/bin/python3', '-W', 'ignore:setup.py install is deprecated', '-W', 'ignore:easy_install command is deprecated', 'setup.py', 'develop', '--editable', '--build-directory', '/home/user/AMR_PyQt/build/my-test-package/build', '--no-deps'], 'cwd': '/home/user/AMR_PyQt/build/my-test-package', 'env': {'GJS_DEBUG_TOPICS': 'JS ERROR;JS LOG', 'PYTHON_BASIC_REPL': '1', 'LANGUAGE': 'en_IN:en', 'USER': 'user', 'XDG_SESSION_TYPE': 'wayland', 'GIT_ASKPASS': '/usr/share/code/resources/app/extensions/git/dist/askpass.sh', 'SHLVL': '1', 'LD_LIBRARY_PATH': '/home/user/hb_ws/install/hb_interfaces/lib:/home/user/hb_ws/install/eyantrasim_msgs/lib:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib', 'HOME': '/home/user', 'CHROME_DESKTOP': 'code.desktop', 'TERM_PROGRAM_VERSION': '1.117.0', 'DESKTOP_SESSION': 'ubuntu', 'NVM_BIN': '/home/user/.nvm/versions/node/v22.21.0/bin', 'NVM_INC': '/home/user/.nvm/versions/node/v22.21.0/include/node', 'GIO_LAUNCHED_DESKTOP_FILE': '/usr/share/applications/code.desktop', 'ROS_PYTHON_VERSION': '3', 'GNOME_SHELL_SESSION_MODE': 'ubuntu', 'GTK_MODULES': 'gail:atk-bridge', 'VSCODE_GIT_ASKPASS_MAIN': '/usr/share/code/resources/app/extensions/git/dist/askpass-main.js', 'PS1': '\\[\x1b]633;A\x07\\](amr_env) \\[\x1b]633;A\x07\\]${debian_chroot:+($debian_chroot)}\\u@\\h:\\w\\$ \\[\x1b]633;B\x07\\]\\[\x1b]633;B\x07\\]', 'VSCODE_GIT_ASKPASS_NODE': '/usr/share/code/code', 'MANAGERPID': '1685', 'PYDEVD_DISABLE_FILE_VALIDATION': '1', 'SYSTEMD_EXEC_PID': '1868', 'BUNDLED_DEBUGPY_PATH': '/home/user/.vscode/extensions/ms-python.debugpy-2026.6.0-linux-x64/bundled/libs/debugpy', 'IM_CONFIG_CHECK_ENV': '1', 'VSCODE_PYTHON_AUTOACTIVATE_GUARD': '1', 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1000/bus', 'COLORTERM': 'truecolor', 'GIO_LAUNCHED_DESKTOP_FILE_PID': '2641', 'NVM_DIR': '/home/user/.nvm', 'IM_CONFIG_PHASE': '1', 'WAYLAND_DISPLAY': 'wayland-0', 'COLCON_PREFIX_PATH': '/home/user/hb_ws/install:/home/user/turtle_flower_ws/install', 'ROS_DISTRO': 'humble', 'LOGNAME': 'user', 'JOURNAL_STREAM': '8:15238', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'XDG_SESSION_CLASS': 'user', 'USERNAME': 'user', 'TERM': 'xterm-256color', 'GAZEBO_MODEL_PATH': ':/opt/ros/humble/share/turtlebot3_gazebo/models', 'GNOME_DESKTOP_SESSION_ID': 'this-is-deprecated', 'FC_FONTATIONS': '1', 'ROS_LOCALHOST_ONLY': '0', 'PATH': '/home/user/AMR_PyQt/amr_env/bin:/home/user/bin:/home/user/.nvm/versions/node/v22.21.0/bin:/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/home/user/.vscode/extensions/ms-python.debugpy-2026.6.0-linux-x64/bundled/scripts/noConfigScripts', 'SESSION_MANAGER': 'local/user-LOQ-15IAX9:@/tmp/.ICE-unix/1839,unix/user-LOQ-15IAX9:/tmp/.ICE-unix/1839', 'INVOCATION_ID': '7d940a3272ef4406a3453c0c7404bb00', 'XDG_MENU_PREFIX': 'gnome-', 'GNOME_SETUP_DISPLAY': ':1', 'XDG_RUNTIME_DIR': '/run/user/1000', 'GDK_BACKEND': 'wayland', 'DISPLAY': ':0', 'VSCODE_DEBUGPY_ADAPTER_ENDPOINTS': '/home/user/.vscode/extensions/ms-python.debugpy-2026.6.0-linux-x64/.noConfigDebugAdapterEndpoints/endpoint-f84f9fcb57fa05eb.txt', 'LANG': 'en_US.UTF-8', 'XDG_CURRENT_DESKTOP': 'ubuntu:GNOME', 'PYTHONSTARTUP': '/home/user/.config/Code/User/workspaceStorage/79465cda0f233e3335bfaaa1fbe07b7c/ms-python.python/pythonrc.py', 'VIRTUAL_ENV_PROMPT': '(amr_env)', 'XMODIFIERS': '@im=ibus', 'XDG_SESSION_DESKTOP': 'ubuntu', 'XAUTHORITY': '/run/user/1000/.mutter-Xwaylandauth.4QNTP3', 'VSCODE_GIT_IPC_HANDLE': '/run/user/1000/vscode-git-ff28e0589a.sock', 'TERM_PROGRAM': 'vscode', 'SSH_AGENT_LAUNCHER': 'gnome-keyring', 'SSH_AUTH_SOCK': '/run/user/1000/keyring/ssh', 'AMENT_PREFIX_PATH': '/home/user/hb_ws/install/hb_interfaces:/home/user/hb_ws/install/hb_description:/home/user/hb_ws/install/hb_control:/home/user/hb_ws/install/eyantrasim_msgs:/home/user/hb_ws/install/eyantrasim:/home/user/turtle_flower_ws/install/turtle_flower_control:/opt/ros/humble', 'SHELL': '/bin/bash', 'QT_ACCESSIBILITY': '1', 'GDMSESSION': 'ubuntu', 'GAZEBO_RESOURCE_PATH': ':/opt/ros/humble/share/turtlebot3_gazebo/worlds', 'GJS_DEBUG_OUTPUT': 'stderr', 'VIRTUAL_ENV': '/home/user/AMR_PyQt/amr_env', 'VSCODE_GIT_ASKPASS_EXTRA_ARGS': '', 'QT_IM_MODULE': 'ibus', 'PWD': '/home/user/AMR_PyQt/build/my-test-package', 'TURTLEBOT3_MODEL': 'burger', 'LC_ALL': 'en_US.UTF-8', 'XDG_CONFIG_DIRS': '/etc/xdg/xdg-ubuntu:/etc/xdg', 'NVM_CD_FLAGS': '', 'XDG_DATA_DIRS': '/usr/share/ubuntu:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop', 'PYTHONPATH': '/home/user/AMR_PyQt/build/my-test-package/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/user/AMR_PyQt/install/my-test-package/lib/python3.10/site-packages:/home/user/hb_ws/install/hb_interfaces/local/lib/python3.10/dist-packages:/home/user/hb_ws/install/eyantrasim_msgs/local/lib/python3.10/dist-packages:/home/user/turtle_flower_ws/install/turtle_flower_control/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/home/user/hb_ws/install/hb_interfaces:/home/user/hb_ws/install/hb_description:/home/user/hb_ws/install/hb_control:/home/user/hb_ws/install/eyantrasim_msgs:/home/user/hb_ws/install/eyantrasim'}, 'shell': False}
+[1.404731] (-) TimerEvent: {}
+[1.505112] (-) TimerEvent: {}
+[1.605477] (-) TimerEvent: {}
+[1.705863] (-) TimerEvent: {}
+[1.777638] (my-test-package) StdoutLine: {'line': b'running develop\n'}
+[1.806014] (-) TimerEvent: {}
+[1.906494] (-) TimerEvent: {}
+[2.006848] (-) TimerEvent: {}
+[2.065007] (my-test-package) StdoutLine: {'line': b'running egg_info\n'}
+[2.065336] (my-test-package) StdoutLine: {'line': b'writing my_test_package.egg-info/PKG-INFO\n'}
+[2.065591] (my-test-package) StdoutLine: {'line': b'writing dependency_links to my_test_package.egg-info/dependency_links.txt\n'}
+[2.065900] (my-test-package) StdoutLine: {'line': b'writing top-level names to my_test_package.egg-info/top_level.txt\n'}
+[2.066851] (my-test-package) StdoutLine: {'line': b"reading manifest file 'my_test_package.egg-info/SOURCES.txt'\n"}
+[2.107002] (-) TimerEvent: {}
+[2.107520] (my-test-package) StdoutLine: {'line': b"writing manifest file 'my_test_package.egg-info/SOURCES.txt'\n"}
+[2.110729] (my-test-package) StdoutLine: {'line': b'running build_ext\n'}
+[2.112518] (my-test-package) StdoutLine: {'line': b'Creating /home/user/AMR_PyQt/install/my-test-package/lib/python3.10/site-packages/my-test-package.egg-link (link to .)\n'}
+[2.114076] (my-test-package) StdoutLine: {'line': b'\n'}
+[2.114330] (my-test-package) StdoutLine: {'line': b'Installed /home/user/AMR_PyQt/build/my-test-package\n'}
+[2.168911] (my-test-package) CommandEnded: {'returncode': 0}
+[2.207125] (-) TimerEvent: {}
+[2.213088] (my-test-package) JobEnded: {'identifier': 'my-test-package', 'rc': 0}
+[2.214386] (-) EventReactorShutdown: {}
